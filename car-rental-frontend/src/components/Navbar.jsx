@@ -20,8 +20,8 @@ function Navbar() {
         
         {/* LEFT: Logo + Brand Name */}
         <NavLink to="/" className="flex items-center gap-3 group">
-          <div className="w-12 h-12 bg-gradient-to-r from-blue-400 to-purple-400 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-            <span className="text-white text-2xl font-bold">🚗</span>
+          <div className="w-12 h-12 bg-gradient-to-r from-blue-400 to-purple-400 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+            <span className="text-white text-lg font-bold tracking-tight">RW</span>
           </div>
           <span className="text-white text-2xl font-bold bg-gradient-to-r from-yellow-400 via-orange-400 to-red-400 text-transparent bg-clip-text group-hover:scale-105 transition-transform duration-300">
             RentWheels
@@ -32,33 +32,23 @@ function Navbar() {
         <div className="flex items-center gap-8">
           <div className="hidden md:flex space-x-6">
             <NavLink to="/" className={linkClasses}>
-              <span className="flex items-center gap-2">
-                🏠 Home
-              </span>
+              Home
             </NavLink>
             <NavLink to="/car-listing" className={linkClasses}>
-              <span className="flex items-center gap-2">
-                🚗 Browse Cars
-              </span>
+              Browse Cars
             </NavLink>
             <NavLink to="/dashboard" className={linkClasses}>
-              <span className="flex items-center gap-2">
-                📊 Dashboard
-              </span>
+              Dashboard
             </NavLink>
             <NavLink to="/login" className={linkClasses}>
-              <span className="flex items-center gap-2">
-                👤 Login
-              </span>
+              Login
             </NavLink>
           </div>
           <button 
             onClick={handleBookNow}
             className="bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 text-white px-6 py-3 rounded-2xl font-bold hover:scale-105 transition-all duration-300 shadow-2xl hover:shadow-blue-500/25 focus:outline-none focus:ring-4 focus:ring-blue-500/50"
           >
-            <span className="flex items-center gap-2">
-              ⚡ Book Now
-            </span>
+            Book Now
           </button>
         </div>
       </div>
