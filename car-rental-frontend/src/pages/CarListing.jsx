@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { carsAPI } from '../services/api';
 
-// Sample car data - later this will come from your backend API
+// Sample car data - will be replaced with API data
 const sampleCars = [
   {
     id: 1,
@@ -98,8 +99,10 @@ const sampleCars = [
 function CarListing() {
   const location = useLocation();
   const navigate = useNavigate();
-  const [cars, setCars] = useState(sampleCars);
-  const [filteredCars, setFilteredCars] = useState(sampleCars);
+  const [cars, setCars] = useState([]);
+  const [filteredCars, setFilteredCars] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [filters, setFilters] = useState({
     carType: '',
     priceRange: '',
@@ -114,16 +117,75 @@ function CarListing() {
     carType: ''
   });
 
+  // Fetch cars from API
+  useEffect(() => {
+    const fetchCars = async () => {
+      try {
+        setLoading(true);
+        console.log('Fetching cars from API...');
+        const response = await carsAPI.getAllCars();
+        console.log('API Response:', response);
+        
+        // Handle the API response structure: { success: true, data: [...], pagination: {...} }
+        const carsData = response.data || [];
+        console.log('Cars data:', carsData);
+        
+        if (carsData.length === 0) {
+          console.warn('No cars found in database, using sample data');
+          setCars(sampleCars);
+          setFilteredCars(sampleCars);
+          setError('No cars found in database. Showing sample data.');
+          return;
+        }
+        
+        // Transform API data to match frontend format
+        const transformedCars = carsData.map(car => {
+          console.log('Transforming car:', car);
+          return {
+            id: car._id,
+            name: `${car.make} ${car.model}`,
+            category: car.type,
+            image: car.images?.[0]?.url || "https://images.unsplash.com/photo-1621007947382-bb3c3994e3fb?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80",
+            pricePerDay: car.pricePerDay,
+            transmission: car.transmission,
+            fuel: car.fuelType,
+            seats: car.seatingCapacity,
+            features: car.features || [],
+            rating: car.rating?.average || 4.5, // Default rating for display
+            reviews: car.rating?.count || 0,
+            available: car.availability,
+            location: `${car.location?.city}, ${car.location?.state}`
+          };
+        });
+        
+        console.log('Transformed cars:', transformedCars);
+        setCars(transformedCars);
+        setFilteredCars(transformedCars);
+        setError(null);
+      } catch (err) {
+        console.error('Error fetching cars:', err);
+        setError('Failed to load cars from database. Using sample data.');
+        // Fallback to sample data
+        setCars(sampleCars);
+        setFilteredCars(sampleCars);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchCars();
+  }, []);
+
   // Get search parameters from navigation state (from HeroSection search)
   useEffect(() => {
     if (location.state?.searchData) {
       setSearchParams(location.state.searchData);
       applySearchFilters(location.state.searchData);
     }
-  }, [location.state]);
+  }, [location.state, cars]);
 
   const applySearchFilters = (searchData) => {
-    let filtered = [...sampleCars];
+    let filtered = [...cars];
 
     // Filter by car type if specified
     if (searchData.carType) {
@@ -305,12 +367,14 @@ function CarListing() {
                   className="w-full px-4 py-3 bg-white/90 backdrop-blur-sm border-2 border-transparent rounded-xl focus:outline-none focus:border-blue-400 focus:bg-white text-gray-900 transition-all duration-300"
                 >
                   <option value="">All Types</option>
-                  <option value="economy">Economy</option>
-                  <option value="compact">Compact</option>
-                  <option value="midsize">Midsize</option>
-                  <option value="luxury">Luxury</option>
+                  <option value="sedan">Sedan</option>
                   <option value="suv">SUV</option>
+                  <option value="hatchback">Hatchback</option>
                   <option value="convertible">Convertible</option>
+                  <option value="coupe">Coupe</option>
+                  <option value="wagon">Wagon</option>
+                  <option value="truck">Truck</option>
+                  <option value="van">Van</option>
                 </select>
               </div>
 
@@ -345,8 +409,8 @@ function CarListing() {
                   className="w-full px-4 py-3 bg-white/90 backdrop-blur-sm border-2 border-transparent rounded-xl focus:outline-none focus:border-purple-400 focus:bg-white text-gray-900 transition-all duration-300"
                 >
                   <option value="">Any</option>
-                  <option value="Automatic">Automatic</option>
-                  <option value="Manual">Manual</option>
+                  <option value="automatic">Automatic</option>
+                  <option value="manual">Manual</option>
                 </select>
               </div>
 
@@ -362,9 +426,10 @@ function CarListing() {
                   className="w-full px-4 py-3 bg-white/90 backdrop-blur-sm border-2 border-transparent rounded-xl focus:outline-none focus:border-yellow-400 focus:bg-white text-gray-900 transition-all duration-300"
                 >
                   <option value="">Any</option>
-                  <option value="Gasoline">Gasoline</option>
-                  <option value="Electric">Electric</option>
-                  <option value="Hybrid">Hybrid</option>
+                  <option value="petrol">Petrol</option>
+                  <option value="diesel">Diesel</option>
+                  <option value="electric">Electric</option>
+                  <option value="hybrid">Hybrid</option>
                 </select>
               </div>
 
@@ -390,7 +455,29 @@ function CarListing() {
 
           {/* Car Listings */}
           <div className="lg:w-3/4">
-            {filteredCars.length === 0 ? (
+            {loading ? (
+              <div className="text-center py-16">
+                <div className="bg-white/10 backdrop-blur-lg rounded-3xl p-12 border border-white/20">
+                  <div className="text-8xl mb-6 animate-spin">⚡</div>
+                  <h3 className="text-3xl font-bold text-white mb-4">Loading Cars...</h3>
+                  <p className="text-slate-300 text-lg">Fetching the best cars for you</p>
+                </div>
+              </div>
+            ) : error ? (
+              <div className="text-center py-16">
+                <div className="bg-white/10 backdrop-blur-lg rounded-3xl p-12 border border-white/20">
+                  <div className="text-8xl mb-6">⚠️</div>
+                  <h3 className="text-3xl font-bold text-white mb-4">Connection Error</h3>
+                  <p className="text-slate-300 text-lg mb-4">{error}</p>
+                  <button 
+                    onClick={() => window.location.reload()}
+                    className="bg-blue-500 hover:bg-blue-600 text-white px-6 py-3 rounded-xl transition-colors duration-300"
+                  >
+                    Retry
+                  </button>
+                </div>
+              </div>
+            ) : filteredCars.length === 0 ? (
               <div className="text-center py-16">
                 <div className="bg-white/10 backdrop-blur-lg rounded-3xl p-12 border border-white/20">
                   <div className="text-8xl mb-6 animate-bounce">🚗</div>
@@ -438,11 +525,11 @@ function CarListing() {
                       <div className="grid grid-cols-2 gap-4 mb-6 text-slate-300">
                         <div className="flex items-center text-sm">
                           <span className="mr-2 text-purple-400">⚙️</span>
-                          {car.transmission}
+                          {car.transmission.charAt(0).toUpperCase() + car.transmission.slice(1)}
                         </div>
                         <div className="flex items-center text-sm">
                           <span className="mr-2 text-yellow-400">⛽</span>
-                          {car.fuel}
+                          {car.fuel.charAt(0).toUpperCase() + car.fuel.slice(1)}
                         </div>
                         <div className="flex items-center text-sm">
                           <span className="mr-2 text-blue-400">👥</span>

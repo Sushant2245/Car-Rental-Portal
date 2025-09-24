@@ -1,7 +1,9 @@
 import { NavLink, useNavigate } from "react-router-dom";
+import { useAuth } from '../contexts/AuthContext';
 
 function Navbar() {
   const navigate = useNavigate();
+  const { isAuthenticated, user, logout } = useAuth();
   
   const linkClasses = ({ isActive }) =>
     `px-4 py-2 rounded-xl text-sm font-medium transition-all duration-300 ${
@@ -12,6 +14,11 @@ function Navbar() {
 
   const handleBookNow = () => {
     navigate('/car-listing');
+  };
+
+  const handleLogout = () => {
+    logout();
+    navigate('/');
   };
 
   return (
@@ -40,9 +47,23 @@ function Navbar() {
             <NavLink to="/dashboard" className={linkClasses}>
               Dashboard
             </NavLink>
-            <NavLink to="/login" className={linkClasses}>
-              Login
-            </NavLink>
+            {isAuthenticated ? (
+              <div className="flex items-center gap-4">
+                <span className="text-gray-300 text-sm">
+                  Welcome, {user?.name || user?.email || 'User'}
+                </span>
+                <button
+                  onClick={handleLogout}
+                  className={`px-4 py-2 rounded-xl text-sm font-medium transition-all duration-300 text-gray-300 hover:bg-white/10 hover:text-white backdrop-blur-sm`}
+                >
+                  Logout
+                </button>
+              </div>
+            ) : (
+              <NavLink to="/login" className={linkClasses}>
+                Login
+              </NavLink>
+            )}
           </div>
           <button 
             onClick={handleBookNow}

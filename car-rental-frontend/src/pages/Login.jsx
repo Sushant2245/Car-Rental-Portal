@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
 
 function Login() {
   const navigate = useNavigate();
+  const { login, register } = useAuth();
   const [isLogin, setIsLogin] = useState(true);
   const [formData, setFormData] = useState({
     email: '',
@@ -11,7 +13,8 @@ function Login() {
     firstName: '',
     lastName: '',
     phone: '',
-    countryCode: '+91'
+    countryCode: '+91',
+    licenseNumber: ''
   });
   const [errors, setErrors] = useState({});
   const [isLoading, setIsLoading] = useState(false);
@@ -59,6 +62,11 @@ function Login() {
       }
       if (!formData.phone) {
         newErrors.phone = 'Phone number is required';
+      } else if (!/^\d{10}$/.test(formData.phone)) {
+        newErrors.phone = 'Please enter a valid 10-digit phone number (without country code)';
+      }
+      if (!formData.licenseNumber) {
+        newErrors.licenseNumber = 'License number is required';
       }
       if (formData.password !== formData.confirmPassword) {
         newErrors.confirmPassword = 'Passwords do not match';
@@ -79,14 +87,46 @@ function Login() {
     setIsLoading(true);
     
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      let result;
       
-      // For now, just navigate to dashboard
-      console.log(isLogin ? 'Login data:' : 'Signup data:', formData);
-      navigate('/dashboard');
+      if (isLogin) {
+        // Login
+        result = await login(formData.email, formData.password);
+      } else {
+        // Register
+        const userData = {
+          name: `${formData.firstName} ${formData.lastName}`,
+          email: formData.email,
+          password: formData.password,
+          phone: formData.phone, // Send only 10 digits as required by backend
+          licenseNumber: formData.licenseNumber,
+          address: {
+            street: '',
+            city: '',
+            state: '',
+            zipCode: '',
+            country: 'India'
+          }
+        };
+        result = await register(userData);
+      }
+      
+      if (result.success) {
+        // Check for pending booking
+        const pendingBooking = localStorage.getItem('pendingBooking');
+        if (pendingBooking) {
+          localStorage.removeItem('pendingBooking');
+          const booking = JSON.parse(pendingBooking);
+          navigate(booking.returnTo || `/car-details/${booking.carId}`);
+        } else {
+          navigate('/dashboard');
+        }
+      } else {
+        setErrors({ submit: result.error });
+      }
     } catch (error) {
       console.error('Authentication error:', error);
+      setErrors({ submit: 'An unexpected error occurred. Please try again.' });
     } finally {
       setIsLoading(false);
     }
@@ -101,7 +141,8 @@ function Login() {
       firstName: '',
       lastName: '',
       phone: '',
-      countryCode: '+91'
+      countryCode: '+91',
+      licenseNumber: ''
     });
     setErrors({});
   };
@@ -208,47 +249,39 @@ function Login() {
             {!isLogin && (
               <div>
                 <label className="block text-white text-sm font-medium mb-2">
-                  Phone Number
+                  Phone Number (10 digits only)
                 </label>
-                <div className="flex gap-2">
-                  <select
-                    name="countryCode"
-                    value={formData.countryCode}
-                    onChange={handleInputChange}
-                    className="px-3 py-3 bg-white/10 border border-white/20 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-300 min-w-[100px]"
-                  >
-                    <option value="+91" className="bg-gray-800">🇮🇳 +91</option>
-                    <option value="+1" className="bg-gray-800">🇺🇸 +1</option>
-                    <option value="+44" className="bg-gray-800">🇬🇧 +44</option>
-                    <option value="+86" className="bg-gray-800">🇨🇳 +86</option>
-                    <option value="+81" className="bg-gray-800">🇯🇵 +81</option>
-                    <option value="+49" className="bg-gray-800">🇩🇪 +49</option>
-                    <option value="+33" className="bg-gray-800">🇫🇷 +33</option>
-                    <option value="+39" className="bg-gray-800">🇮🇹 +39</option>
-                    <option value="+34" className="bg-gray-800">🇪🇸 +34</option>
-                    <option value="+7" className="bg-gray-800">🇷🇺 +7</option>
-                    <option value="+55" className="bg-gray-800">🇧🇷 +55</option>
-                    <option value="+61" className="bg-gray-800">🇦🇺 +61</option>
-                    <option value="+82" className="bg-gray-800">🇰🇷 +82</option>
-                    <option value="+65" className="bg-gray-800">🇸🇬 +65</option>
-                    <option value="+971" className="bg-gray-800">🇦🇪 +971</option>
-                    <option value="+966" className="bg-gray-800">🇸🇦 +966</option>
-                    <option value="+27" className="bg-gray-800">🇿🇦 +27</option>
-                    <option value="+52" className="bg-gray-800">🇲🇽 +52</option>
-                    <option value="+31" className="bg-gray-800">🇳🇱 +31</option>
-                    <option value="+46" className="bg-gray-800">🇸🇪 +46</option>
-                  </select>
-                  <input
-                    type="tel"
-                    name="phone"
-                    value={formData.phone}
-                    onChange={handleInputChange}
-                    className="flex-1 px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-300"
-                    placeholder="123-456-7890"
-                  />
-                </div>
+                <input
+                  type="tel"
+                  name="phone"
+                  value={formData.phone}
+                  onChange={handleInputChange}
+                  className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-300"
+                  placeholder="9876543210"
+                  maxLength="10"
+                />
                 {errors.phone && (
                   <p className="text-red-400 text-xs mt-1">{errors.phone}</p>
+                )}
+              </div>
+            )}
+
+            {/* License Number Field (Signup only) */}
+            {!isLogin && (
+              <div>
+                <label className="block text-white text-sm font-medium mb-2">
+                  Driver's License Number
+                </label>
+                <input
+                  type="text"
+                  name="licenseNumber"
+                  value={formData.licenseNumber}
+                  onChange={handleInputChange}
+                  className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-300"
+                  placeholder="DL1234567890"
+                />
+                {errors.licenseNumber && (
+                  <p className="text-red-400 text-xs mt-1">{errors.licenseNumber}</p>
                 )}
               </div>
             )}
@@ -300,6 +333,13 @@ function Login() {
                 >
                   Forgot Password?
                 </button>
+              </div>
+            )}
+
+            {/* Submit Error Display */}
+            {errors.submit && (
+              <div className="bg-red-500/20 border border-red-500/50 rounded-xl p-3 mb-4">
+                <p className="text-red-400 text-sm text-center">{errors.submit}</p>
               </div>
             )}
 

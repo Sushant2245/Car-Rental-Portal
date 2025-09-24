@@ -1,8 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { authAPI, bookingsAPI, usersAPI } from '../services/api';
+import { useAuth } from '../contexts/AuthContext';
 
 function Dashboard() {
   const navigate = useNavigate();
+  const { user: authUser, isAuthenticated, logout } = useAuth();
   const [user, setUser] = useState({
     name: 'John Doe',
     email: 'john.doe@example.com',
@@ -15,7 +18,6 @@ function Dashboard() {
   });
 
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [isReminderModalOpen, setIsReminderModalOpen] = useState(false);
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
   const [isSupportModalOpen, setIsSupportModalOpen] = useState(false);
   const [editForm, setEditForm] = useState({
@@ -80,38 +82,115 @@ function Dashboard() {
     { code: '+36', abbr: 'HU' }
   ];
 
-  const [recentBookings] = useState([
-    {
-      id: 1,
-      carName: 'Toyota Camry',
-      bookingDate: '2024-01-15',
-      returnDate: '2024-01-20',
-      status: 'Active',
-      amount: '$225',
-      image: 'https://images.unsplash.com/photo-1621007947382-bb3c3994e3fb?ixlib=rb-4.0.3&auto=format&fit=crop&w=300&q=80'
-    },
-    {
-      id: 2,
-      carName: 'BMW X5',
-      bookingDate: '2024-01-10',
-      returnDate: '2024-01-12',
-      status: 'Completed',
-      amount: '$178',
-      image: 'https://images.unsplash.com/photo-1555215695-3004980ad54e?ixlib=rb-4.0.3&auto=format&fit=crop&w=300&q=80'
-    },
-    {
-      id: 3,
-      carName: 'Honda Civic',
-      bookingDate: '2024-01-05',
-      returnDate: '2024-01-08',
-      status: 'Completed',
-      amount: '$105',
-      image: 'https://images.unsplash.com/photo-1606664515524-ed2f786a0bd6?ixlib=rb-4.0.3&auto=format&fit=crop&w=300&q=80'
-    }
-  ]);
+  const [recentBookings, setRecentBookings] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  // Fetch user data and bookings from API
+  useEffect(() => {
+    const fetchDashboardData = async () => {
+      try {
+        setLoading(true);
+        
+        // Check if user is authenticated
+        if (!isAuthenticated || !authUser) {
+          // Use sample data if not authenticated
+          setUser({
+            name: 'John Doe',
+            email: 'john.doe@example.com',
+            phone: '123-4567',
+            countryCode: '+91',
+            address: '123 Main St, New York, NY 10001',
+            memberSince: '2023',
+            totalBookings: 0,
+            activeBookings: 0
+          });
+          setRecentBookings([]);
+          setError('Please login to view your bookings');
+          return;
+        }
+
+        // Use authenticated user data
+        const userData = authUser;
+        
+        // Fetch user bookings
+        console.log('Fetching bookings for authenticated user...');
+        const bookingsResponse = await bookingsAPI.getAllBookings();
+        console.log('Bookings response:', bookingsResponse);
+        const bookingsData = bookingsResponse.data || bookingsResponse.bookings || bookingsResponse || [];
+        
+        // Transform user data
+        const transformedUser = {
+          name: userData.name || 'Unknown User',
+          email: userData.email || '',
+          phone: userData.phone || 'Not provided',
+          countryCode: '+91', // Default or from userData
+          address: userData.address ? 
+            `${userData.address.street || ''}, ${userData.address.city || ''}, ${userData.address.state || ''}`.trim().replace(/^,\s*|,\s*$/g, '') || 'Not provided'
+            : 'Not provided',
+          memberSince: userData.createdAt ? new Date(userData.createdAt).getFullYear().toString() : '2024',
+          totalBookings: Array.isArray(bookingsData) ? bookingsData.length : 0,
+          activeBookings: Array.isArray(bookingsData) ? bookingsData.filter(b => b.status === 'active' || b.status === 'confirmed').length : 0
+        };
+
+        // Transform bookings data
+        const transformedBookings = Array.isArray(bookingsData) && bookingsData.length > 0 ? 
+          bookingsData.slice(0, 3).map(booking => ({
+            id: booking._id,
+            carName: `${booking.car?.make || 'Car'} ${booking.car?.model || ''}`.trim(),
+            bookingDate: new Date(booking.startDate).toLocaleDateString(),
+            returnDate: new Date(booking.endDate).toLocaleDateString(),
+            status: booking.status === 'active' ? 'Active' : 
+                    booking.status === 'completed' ? 'Completed' : 
+                    booking.status === 'cancelled' ? 'Cancelled' : 'Pending',
+            amount: `$${booking.totalAmount}`,
+            image: booking.car?.images?.[0]?.url || 'https://images.unsplash.com/photo-1621007947382-bb3c3994e3fb?ixlib=rb-4.0.3&auto=format&fit=crop&w=300&q=80'
+          })) : [];
+
+        setUser(transformedUser);
+        setRecentBookings(transformedBookings);
+        setError(null);
+      } catch (err) {
+        console.error('Error fetching dashboard data:', err);
+        setError('Failed to load dashboard data. Using sample data.');
+        
+        // Fallback to sample data
+        setUser({
+          name: 'John Doe',
+          email: 'john.doe@example.com',
+          phone: '123-4567',
+          countryCode: '+91',
+          address: '123 Main St, New York, NY 10001',
+          memberSince: '2023',
+          totalBookings: 12,
+          activeBookings: 2
+        });
+        setRecentBookings([
+          {
+            id: 1,
+            carName: 'Toyota Camry',
+            bookingDate: '2024-01-15',
+            returnDate: '2024-01-20',
+            status: 'Active',
+            amount: '$225',
+            image: 'https://images.unsplash.com/photo-1621007947382-bb3c3994e3fb?ixlib=rb-4.0.3&auto=format&fit=crop&w=300&q=80'
+          }
+        ]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchDashboardData();
+  }, [isAuthenticated, authUser, refreshKey]);
 
   const handleNewBooking = () => {
     navigate('/car-listing');
+  };
+
+  const handleRefreshData = () => {
+    setRefreshKey(prev => prev + 1);
   };
 
   const handleEditProfile = () => {
@@ -147,14 +226,6 @@ function Dashboard() {
       address: editForm.address
     }));
     setIsEditModalOpen(false);
-  };
-
-  const handleViewReminderDetails = () => {
-    setIsReminderModalOpen(true);
-  };
-
-  const handleCloseReminderModal = () => {
-    setIsReminderModalOpen(false);
   };
 
 
@@ -197,7 +268,7 @@ function Dashboard() {
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
           <div className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100">
             <div className="flex items-center justify-between">
               <div>
@@ -240,19 +311,6 @@ function Dashboard() {
             </div>
           </div>
 
-          <div className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-500 text-sm font-medium">Loyalty Points</p>
-                <p className="text-3xl font-bold text-gray-800">2,450</p>
-              </div>
-              <div className="w-12 h-12 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full flex items-center justify-center">
-                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
-                </svg>
-              </div>
-            </div>
-          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -262,33 +320,73 @@ function Dashboard() {
               <div className="p-6 border-b border-gray-100">
                 <div className="flex items-center justify-between">
                   <h2 className="text-2xl font-bold text-gray-800">Recent Bookings</h2>
-                  <button className="text-blue-600 hover:text-blue-700 font-medium">View All</button>
+                  <div className="flex items-center gap-3">
+                    <button 
+                      onClick={handleRefreshData}
+                      className="text-green-600 hover:text-green-700 font-medium flex items-center gap-1"
+                      title="Refresh bookings"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                      Refresh
+                    </button>
+                    <button className="text-blue-600 hover:text-blue-700 font-medium">View All</button>
+                  </div>
                 </div>
               </div>
               <div className="p-6">
-                <div className="space-y-4">
-                  {recentBookings.map((booking) => (
-                    <div key={booking.id} className="flex items-center space-x-4 p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors duration-200">
-                      <img 
-                        src={booking.image} 
-                        alt={booking.carName}
-                        className="w-16 h-16 object-cover rounded-lg"
-                      />
-                      <div className="flex-1">
-                        <h3 className="font-semibold text-gray-800">{booking.carName}</h3>
-                        <p className="text-sm text-gray-500">
-                          {booking.bookingDate} - {booking.returnDate}
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-bold text-gray-800">{booking.amount}</p>
-                        <span className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(booking.status)}`}>
-                          {booking.status}
-                        </span>
-                      </div>
+                {loading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <div className="text-gray-500 flex items-center gap-2">
+                      <svg className="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                      Loading bookings...
                     </div>
-                  ))}
-                </div>
+                  </div>
+                ) : error && !isAuthenticated ? (
+                  <div className="text-center py-8">
+                    <div className="text-yellow-600 mb-2">⚠️ Please login to view your bookings</div>
+                    <p className="text-gray-500 text-sm">Sign in to see your rental history and active bookings</p>
+                  </div>
+                ) : recentBookings.length === 0 ? (
+                  <div className="text-center py-8">
+                    <div className="text-gray-400 text-6xl mb-4">🚗</div>
+                    <h3 className="text-gray-700 font-semibold mb-2">No bookings yet</h3>
+                    <p className="text-gray-500 text-sm mb-4">Start your journey by booking your first car!</p>
+                    <button 
+                      onClick={handleNewBooking}
+                      className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors duration-200"
+                    >
+                      Browse Cars
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {recentBookings.map((booking) => (
+                      <div key={booking.id} className="flex items-center space-x-4 p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors duration-200">
+                        <img 
+                          src={booking.image} 
+                          alt={booking.carName}
+                          className="w-16 h-16 object-cover rounded-lg"
+                        />
+                        <div className="flex-1">
+                          <h3 className="font-semibold text-gray-800">{booking.carName}</h3>
+                          <p className="text-sm text-gray-500">
+                            {booking.bookingDate} - {booking.returnDate}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-bold text-gray-800">{booking.amount}</p>
+                          <span className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(booking.status)}`}>
+                            {booking.status}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -350,24 +448,6 @@ function Dashboard() {
               </div>
             </div>
 
-            {/* Upcoming Reminder */}
-            <div className="bg-gradient-to-r from-orange-500 to-red-500 rounded-2xl shadow-lg p-6 text-white">
-              <div className="flex items-center space-x-3 mb-3">
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.268 16.5c-.77.833.192 2.5 1.732 2.5z" />
-                </svg>
-                <h4 className="font-bold">Reminder</h4>
-              </div>
-              <p className="text-sm opacity-90">
-                Your Toyota Camry rental is due for return tomorrow at 2:00 PM.
-              </p>
-              <button 
-                onClick={handleViewReminderDetails}
-                className="mt-3 bg-white/20 hover:bg-white/30 px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-200"
-              >
-                View Details
-              </button>
-            </div>
           </div>
         </div>
       </div>
@@ -472,107 +552,6 @@ function Dashboard() {
                   </button>
                 </div>
               </form>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Reminder Details Modal */}
-      {isReminderModalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white shadow-2xl w-full max-w-md max-h-[90vh] overflow-hidden border border-gray-100">
-            <div className="overflow-y-auto max-h-[90vh]">
-            <div className="p-6">
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-2xl font-bold text-gray-800">Rental Reminder Details</h2>
-                <button 
-                  onClick={handleCloseReminderModal}
-                  className="text-gray-400 hover:text-gray-600 transition-colors duration-200"
-                >
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-
-              <div className="space-y-4">
-                {/* Car Details */}
-                <div className="bg-gradient-to-r from-orange-50 to-red-50 rounded-xl p-4 border border-orange-200">
-                  <div className="flex items-center space-x-3 mb-3">
-                    <div className="w-10 h-10 bg-gradient-to-r from-orange-500 to-red-500 rounded-full flex items-center justify-center">
-                      <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.268 16.5c-.77.833.192 2.5 1.732 2.5z" />
-                      </svg>
-                    </div>
-                    <h3 className="text-lg font-bold text-gray-800">Return Reminder</h3>
-                  </div>
-                  <p className="text-gray-700 font-medium">Your Toyota Camry rental is due for return tomorrow at 2:00 PM.</p>
-                </div>
-
-                {/* Car Info */}
-                <div className="bg-white rounded-xl p-4 border border-gray-100 shadow-sm">
-                  <div className="flex items-center space-x-3">
-                    <img 
-                      src="https://images.unsplash.com/photo-1621007947382-bb3c3994e3fb?ixlib=rb-4.0.3&auto=format&fit=crop&w=300&q=80" 
-                      alt="Toyota Camry"
-                      className="w-16 h-16 object-cover rounded-lg"
-                    />
-                    <div>
-                      <h4 className="text-lg font-bold text-gray-800">Toyota Camry</h4>
-                      <p className="text-gray-500 text-sm">Booking ID: #RC2024001</p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Date Details */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="bg-white rounded-xl p-4 border border-gray-100 shadow-sm">
-                    <p className="text-sm text-gray-500 font-medium">Pickup Date</p>
-                    <p className="text-gray-800 font-semibold">Jan 15, 2024</p>
-                    <p className="text-sm text-gray-600">10:00 AM</p>
-                  </div>
-                  <div className="bg-white rounded-xl p-4 border border-red-200 shadow-sm">
-                    <p className="text-sm text-red-600 font-medium">Return Date</p>
-                    <p className="text-red-800 font-semibold">Jan 20, 2024</p>
-                    <p className="text-sm text-red-700">2:00 PM</p>
-                  </div>
-                </div>
-
-                {/* Location */}
-                <div className="bg-white rounded-xl p-4 border border-gray-100 shadow-sm">
-                  <h5 className="font-semibold text-gray-800 mb-2">Pickup & Return Location</h5>
-                </div>
-
-                {/* Important Notes */}
-                <div className="bg-blue-50 rounded-xl p-4 border border-blue-200">
-                  <h5 className="font-semibold text-blue-800 mb-3">Important Notes</h5>
-                  <ul className="text-sm text-blue-700 space-y-2">
-                    <li className="flex items-start">
-                      <span className="text-blue-500 mr-2">•</span>
-                      Vehicle inspection required upon return
-                    </li>
-                    <li className="flex items-start">
-                      <span className="text-blue-500 mr-2">•</span>
-                      Late return charges: $25/hour
-                    </li>
-                    <li className="flex items-start">
-                      <span className="text-blue-500 mr-2">•</span>
-                      Bring your driver's license and rental agreement
-                    </li>
-                  </ul>
-                </div>
-
-                {/* Action Buttons */}
-                <div className="flex justify-center pt-2">
-                  <button
-                    onClick={handleCloseReminderModal}
-                    className="px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded-xl hover:scale-105 transition-transform duration-200 font-medium"
-                  >
-                    Close
-                  </button>
-                </div>
-              </div>
-            </div>
             </div>
           </div>
         </div>
