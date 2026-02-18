@@ -14,12 +14,31 @@ const userRoutes = require('./routes/users');
 
 const app = express();
 
-// Middleware
-app.use(cors());
+/*
+========================================
+CORS CONFIGURATION
+========================================
+*/
+app.use(
+  cors({
+    origin: process.env.FRONTEND_URL, // frontend URL from Render
+    credentials: true,
+  })
+);
+
+/*
+========================================
+MIDDLEWARE
+========================================
+*/
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Routes
+/*
+========================================
+ROUTES
+========================================
+*/
 app.use('/api/auth', authRoutes);
 app.use('/api/cars', carRoutes);
 app.use('/api/bookings', bookingRoutes);
@@ -30,12 +49,19 @@ app.get('/api/health', (req, res) => {
   res.json({ message: 'Car Rental Backend is running!', status: 'OK' });
 });
 
-// Error handling middleware
+/*
+========================================
+ERROR HANDLING
+========================================
+*/
 app.use((err, req, res, next) => {
   console.error(err.stack);
-  res.status(500).json({ 
-    message: 'Something went wrong!', 
-    error: process.env.NODE_ENV === 'development' ? err.message : 'Internal Server Error' 
+  res.status(500).json({
+    message: 'Something went wrong!',
+    error:
+      process.env.NODE_ENV === 'development'
+        ? err.message
+        : 'Internal Server Error',
   });
 });
 
@@ -44,18 +70,30 @@ app.use('*', (req, res) => {
   res.status(404).json({ message: 'Route not found' });
 });
 
-// Database connection
+/*
+========================================
+DATABASE CONNECTION
+========================================
+*/
 const connectDB = async () => {
   try {
-    const conn = await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/car-rental');
+    if (!process.env.MONGODB_URI) {
+      throw new Error('MONGODB_URI not defined in environment variables');
+    }
+
+    const conn = await mongoose.connect(process.env.MONGODB_URI);
     console.log(`MongoDB Connected: ${conn.connection.host}`);
   } catch (error) {
-    console.error('Database connection error:', error);
+    console.error('Database connection error:', error.message);
     process.exit(1);
   }
 };
 
-// Start server
+/*
+========================================
+START SERVER
+========================================
+*/
 const PORT = process.env.PORT || 5000;
 
 connectDB().then(() => {
